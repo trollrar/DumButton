@@ -39,6 +39,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        btn_advrt.isEnabled = true
+        btn_discover.isEnabled = true
+    }
+
     private fun hasPermissions(context: Context, vararg permissions: String): Boolean {
         for (permission in permissions) {
             if (ContextCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED) {

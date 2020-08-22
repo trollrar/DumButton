@@ -33,21 +33,23 @@ class ButtonActivity : AppCompatActivity() {
         name = intent.getStringExtra("name")!!
         mode = Mode.valueOf(intent.getStringExtra("mode")!!)
 
-        setConnecting(true)
 
         connectionsClient = Nearby.getConnectionsClient(this)
 
         txt_code.text = "Room name: " + code
         txt_ready.text = "Nickname: " + name
-        txt_status.text = "Waiting for players to join"
 
         when (mode) {
             Mode.HOST -> {
                 setConnecting(false)
                 players["HOST"] = Player(name) //TODO: set hosts original id
+                txt_status.text = "Waiting for players to join"
                 startAdvertising()
             }
-            Mode.JOIN -> startDiscovery()
+            Mode.JOIN -> {
+                setConnecting(true)
+                startDiscovery()
+            }
         }
     }
 
@@ -77,19 +79,7 @@ class ButtonActivity : AppCompatActivity() {
                 }
                 PackageType.READY -> {
                     players[endpointId]!!.ready = !players[endpointId]!!.ready
-                    var everyoneReady = true
-                    players.values.forEach {player ->
-                        if (!player.ready) {
-                            everyoneReady = false
-                            return
-                        }
-                    }
-                    if (everyoneReady) {
-                        sendTimestamp()
-                    } else {
-                        sendPlayers()
-                        updatePlayers()
-                    }
+                    checkIfEveryoneIsReady()
                 }
                 PackageType.TIMER -> {
                     val timestamp = deSerialized.value as Long
@@ -107,20 +97,7 @@ class ButtonActivity : AppCompatActivity() {
                     val score = deSerialized.value as Long
                     players[endpointId]!!.scores[round] = score
 
-                    var everyoneClicked = true
-                    players.values.forEach {player ->
-                        if (player.scores[round] == null) {
-                            everyoneClicked = false
-                            return
-                        }
-                    }
-                    if (everyoneClicked) {
-                        players.values.forEach {player ->
-                            player.ready = false
-                        }
-                        sendPlayers()
-                        updatePlayers()
-                    }
+                    checkIfEveryoneClicked()
                 }
             }
         }
@@ -131,13 +108,45 @@ class ButtonActivity : AppCompatActivity() {
         }
     }
 
+    private fun checkIfEveryoneIsReady() {
+        var everyoneReady = true
+        players.values.forEach {player ->
+            if (!player.ready) {
+                everyoneReady = false
+            }
+        }
+        if (everyoneReady) {
+            sendTimestamp()
+        } else {
+            sendPlayers()
+            updatePlayers()
+        }
+    }
+
+    private fun checkIfEveryoneClicked() {
+        var everyoneClicked = true
+        players.values.forEach {player ->
+            if (player.scores[round] == null) {
+                everyoneClicked = false
+            }
+        }
+        if (everyoneClicked) {
+            players.values.forEach {player ->
+                player.ready = false
+            }
+            sendPlayers()
+            updatePlayers()
+            round++
+        }
+    }
+
     private fun showButton() {
         btn_press.visibility = VISIBLE
     }
 
     private fun sendTimestamp() {
         val timestamp: Long = System.currentTimeMillis() + (1000..5000).random()
-        connectionsClient.sendPayload(hostId!!, Payload.fromBytes(serialize(BytePackage(PackageType.TIMER, timestamp))!!))
+        sendPayloadToClients(Payload.fromBytes(serialize(BytePackage(PackageType.TIMER, timestamp))!!))
         val delay: Long = timestamp - System.currentTimeMillis()
         val handler = Handler()
         handler.postDelayed({
@@ -145,6 +154,12 @@ class ButtonActivity : AppCompatActivity() {
         }, delay)
         startCounting()
         currentTimestamp = timestamp
+    }
+
+    private fun sendPayloadToClients(payload: Payload) {
+        players.keys.forEach {
+            if (it != "HOST") connectionsClient.sendPayload(it, payload)
+        }
     }
 
     private fun startCounting() {
@@ -199,9 +214,7 @@ class ButtonActivity : AppCompatActivity() {
     }
 
     private fun sendPlayers() {
-        players.keys.forEach {playerId ->
-            connectionsClient.sendPayload(playerId, Payload.fromBytes(serialize(BytePackage(PackageType.PLAYERS, players as Serializable))!!))
-        }
+        sendPayloadToClients(Payload.fromBytes(serialize(BytePackage(PackageType.PLAYERS, players as Serializable))!!))
     }
 
     private val endpointDiscoveryCallback = object : EndpointDiscoveryCallback() {
@@ -292,8 +305,7 @@ class ButtonActivity : AppCompatActivity() {
         when (mode) {
             Mode.HOST -> {
                 players["HOST"]!!.ready = !players["HOST"]!!.ready
-                sendPlayers()
-                updatePlayers()
+                checkIfEveryoneIsReady()
             }
             Mode.JOIN -> connectionsClient.sendPayload(hostId!!, Payload.fromBytes(serialize(BytePackage(PackageType.READY, null))!!))
         }
@@ -305,6 +317,7 @@ class ButtonActivity : AppCompatActivity() {
         when (mode) {
             Mode.HOST -> {
                 players["HOST"]!!.scores[round] = score
+                checkIfEveryoneClicked()
             }
             Mode.JOIN -> {
                 connectionsClient.sendPayload(hostId!!, Payload.fromBytes(serialize(BytePackage(PackageType.SCORE, score))!!))
