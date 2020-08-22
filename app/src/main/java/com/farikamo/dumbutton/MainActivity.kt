@@ -1,6 +1,7 @@
 package com.farikamo.dumbutton
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
@@ -59,19 +60,21 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private val endpointIds: MutableList<String> = mutableListOf()
+    private val endpointIds: MutableSet<String> = mutableSetOf()
     private val connectionLifecycleCallback = object : ConnectionLifecycleCallback() {
         override fun onConnectionInitiated(endpointId: String, connectionInfo: ConnectionInfo) {
             // Automatically accept the connection on both sides.
             connectionsClient.acceptConnection(endpointId, payloadCallback)
             endpointIds.add(endpointId);
-            setStatusText("onConnectionInitiated ${connectionInfo.endpointName}")
         }
 
         override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {
             when (result.status.statusCode) {
                 ConnectionsStatusCodes.STATUS_OK -> {
-                    setStatusText("onConnectionResult ${result.status}")
+                    setStatusText("connected: ${endpointId}")
+
+                    connectionsClient.stopDiscovery()
+                    connectionsClient.stopAdvertising()
                 }
                 ConnectionsStatusCodes.STATUS_CONNECTION_REJECTED -> {
                 }
@@ -94,11 +97,11 @@ class MainActivity : AppCompatActivity() {
             // An endpoint was found. We request a connection to it.
             connectionsClient
                 .requestConnection(getUserNickname(), endpointId, connectionLifecycleCallback)
-                .addOnSuccessListener { unused: Void? ->
+                .addOnSuccessListener { unused ->
                     // We successfully requested a connection. Now both sides
                     // must accept before the connection is established.
                 }
-                .addOnFailureListener { e: Exception ->
+                .addOnFailureListener { e ->
                     // Nearby Connections failed to request the connection.
                 }
         }
@@ -112,12 +115,12 @@ class MainActivity : AppCompatActivity() {
         val advertisingOptions = AdvertisingOptions.Builder().setStrategy(STRATEGY).build()
         connectionsClient
             .startAdvertising(
-                getUserNickname(), packageName + getRoomName(), connectionLifecycleCallback, advertisingOptions
+                getUserNickname(), packageName, connectionLifecycleCallback, advertisingOptions
             )
-            .addOnSuccessListener { unused: Void? ->
+            .addOnSuccessListener { unused ->
                 // We're advertising!
             }
-            .addOnFailureListener { e: Exception ->
+            .addOnFailureListener { e ->
                 // We were unable to start advertising.
             }
     }
@@ -125,11 +128,11 @@ class MainActivity : AppCompatActivity() {
     private fun startDiscovery() {
         val discoveryOptions = DiscoveryOptions.Builder().setStrategy(STRATEGY).build()
         connectionsClient
-            .startDiscovery(packageName + getRoomName(), endpointDiscoveryCallback, discoveryOptions)
-            .addOnSuccessListener { unused: Void? ->
+            .startDiscovery(packageName, endpointDiscoveryCallback, discoveryOptions)
+            .addOnSuccessListener { unused ->
                 // We're discovering!
             }
-            .addOnFailureListener { e: Exception ->
+            .addOnFailureListener { e ->
                 // We're unable to start discovering.
             }
     }
@@ -142,12 +145,18 @@ class MainActivity : AppCompatActivity() {
         return txt_room_name.toString()
     }
 
-    /** Finds an opponent to play the game with using Nearby Connections.  */
-    fun findOpponent(view: View) {
-        startAdvertising()
+    fun discover(view: View) {
         startDiscovery()
-        setStatusText("ZDAJ ISCEM")
-        btn_advrt_discover.isEnabled = false
+        setStatusText("discovering")
+        btn_advrt.isEnabled = false
+        btn_discover.isEnabled = false
+    }
+
+    fun advertise(view: View) {
+        startAdvertising()
+        setStatusText("advertising")
+        btn_advrt.isEnabled = false
+        btn_discover.isEnabled = false
     }
 
     fun ready(view: View) {
@@ -158,13 +167,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    @SuppressLint("SetTextI18n")
     fun setStatusText(status: String) {
-        txt_status.text = status
+        txt_status.text = txt_status.text.toString() + "\n" + status
     }
 
     companion object {
         private const val REQUEST_CODE_REQUIRED_PERMISSIONS = 1
-        private val STRATEGY = Strategy.P2P_STAR
+        private val STRATEGY = Strategy.P2P_CLUSTER
         private val REQUIRED_PERMISSIONS = arrayOf(
             Manifest.permission.BLUETOOTH,
             Manifest.permission.BLUETOOTH_ADMIN,
