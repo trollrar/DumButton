@@ -20,9 +20,6 @@ import kotlin.text.Charsets.UTF_8
 
 
 class MainActivity : AppCompatActivity() {
-
-
-
     private lateinit var connectionsClient: ConnectionsClient
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -66,7 +63,7 @@ class MainActivity : AppCompatActivity() {
     private val connectionLifecycleCallback = object : ConnectionLifecycleCallback() {
         override fun onConnectionInitiated(endpointId: String, connectionInfo: ConnectionInfo) {
             // Automatically accept the connection on both sides.
-            Nearby.getConnectionsClient(this@MainActivity).acceptConnection(endpointId, payloadCallback)
+            connectionsClient.acceptConnection(endpointId, payloadCallback)
             endpointIds.add(endpointId);
             setStatusText("onConnectionInitiated ${connectionInfo.endpointName}")
         }
@@ -95,9 +92,9 @@ class MainActivity : AppCompatActivity() {
     private val endpointDiscoveryCallback = object : EndpointDiscoveryCallback() {
         override fun onEndpointFound(endpointId: String, info: DiscoveredEndpointInfo) {
             // An endpoint was found. We request a connection to it.
-            Nearby.getConnectionsClient(this@MainActivity)
+            connectionsClient
                 .requestConnection(getUserNickname(), endpointId, connectionLifecycleCallback)
-                .addOnSuccessListener { unused: Void ->
+                .addOnSuccessListener { unused: Void? ->
                     // We successfully requested a connection. Now both sides
                     // must accept before the connection is established.
                 }
@@ -113,11 +110,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun startAdvertising() {
         val advertisingOptions = AdvertisingOptions.Builder().setStrategy(STRATEGY).build()
-        Nearby.getConnectionsClient(this)
+        connectionsClient
             .startAdvertising(
                 getUserNickname(), packageName + getRoomName(), connectionLifecycleCallback, advertisingOptions
             )
-            .addOnSuccessListener { unused: Void ->
+            .addOnSuccessListener { unused: Void? ->
                 // We're advertising!
             }
             .addOnFailureListener { e: Exception ->
@@ -127,9 +124,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun startDiscovery() {
         val discoveryOptions = DiscoveryOptions.Builder().setStrategy(STRATEGY).build()
-        Nearby.getConnectionsClient(this)
+        connectionsClient
             .startDiscovery(packageName + getRoomName(), endpointDiscoveryCallback, discoveryOptions)
-            .addOnSuccessListener { unused: Void ->
+            .addOnSuccessListener { unused: Void? ->
                 // We're discovering!
             }
             .addOnFailureListener { e: Exception ->
@@ -155,7 +152,7 @@ class MainActivity : AppCompatActivity() {
 
     fun ready(view: View) {
         endpointIds.forEach { opponentEndpointId ->
-            Nearby.getConnectionsClient(this).sendPayload(
+            connectionsClient.sendPayload(
                 opponentEndpointId, Payload.fromBytes("ready".toByteArray(UTF_8))
             )
         }
