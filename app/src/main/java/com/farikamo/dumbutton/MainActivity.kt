@@ -16,18 +16,19 @@ import com.google.android.gms.nearby.connection.*
 import com.google.android.gms.nearby.connection.DiscoveryOptions
 import com.google.android.gms.nearby.connection.DiscoveredEndpointInfo
 import com.google.android.gms.nearby.connection.EndpointDiscoveryCallback
+import kotlinx.android.synthetic.main.activity_button.*
 import kotlinx.android.synthetic.main.activity_main.*
 import kotlin.text.Charsets.UTF_8
+import android.content.Intent
+
+
 
 
 class MainActivity : AppCompatActivity() {
-    private lateinit var connectionsClient: ConnectionsClient
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-
-        connectionsClient = Nearby.getConnectionsClient(this)
     }
 
     @RequiresApi(Build.VERSION_CODES.M)
@@ -47,134 +48,36 @@ class MainActivity : AppCompatActivity() {
         return true
     }
 
-    private val payloadCallback = object : PayloadCallback() {
-        override fun onPayloadReceived(endpointId: String, payload: Payload) {
-            // This always gets the full data of the payload. Will be null if it's not a BYTES
-            // payload. You can check the payload type with payload.getType().
-            setStatusText("received payload " + String(payload.asBytes()!!, UTF_8))
-        }
-
-        override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {
-            // Bytes payloads are sent as a single chunk, so you'll receive a SUCCESS update immediately
-            // after the call to onPayloadReceived().
-        }
-    }
-
-    private val endpointIds: MutableSet<String> = mutableSetOf()
-    private val connectionLifecycleCallback = object : ConnectionLifecycleCallback() {
-        override fun onConnectionInitiated(endpointId: String, connectionInfo: ConnectionInfo) {
-            // Automatically accept the connection on both sides.
-            connectionsClient.acceptConnection(endpointId, payloadCallback)
-            endpointIds.add(endpointId);
-        }
-
-        override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {
-            when (result.status.statusCode) {
-                ConnectionsStatusCodes.STATUS_OK -> {
-                    setStatusText("connected: ${endpointId}")
-
-                    connectionsClient.stopDiscovery()
-                    connectionsClient.stopAdvertising()
-                }
-                ConnectionsStatusCodes.STATUS_CONNECTION_REJECTED -> {
-                }
-                ConnectionsStatusCodes.STATUS_ERROR -> {
-                }
-            }// We're connected! Can now start sending and receiving data.
-            // The connection was rejected by one or both sides.
-            // The connection broke before it was able to be accepted.
-            // Unknown status code
-        }
-
-        override fun onDisconnected(endpointId: String) {
-            // We've been disconnected from this endpoint. No more data can be
-            // sent or received.
-        }
-    }
-
-    private val endpointDiscoveryCallback = object : EndpointDiscoveryCallback() {
-        override fun onEndpointFound(endpointId: String, info: DiscoveredEndpointInfo) {
-            // An endpoint was found. We request a connection to it.
-            connectionsClient
-                .requestConnection(getUserNickname(), endpointId, connectionLifecycleCallback)
-                .addOnSuccessListener { unused ->
-                    // We successfully requested a connection. Now both sides
-                    // must accept before the connection is established.
-                }
-                .addOnFailureListener { e ->
-                    // Nearby Connections failed to request the connection.
-                }
-        }
-
-        override fun onEndpointLost(endpointId: String) {
-            // A previously discovered endpoint has gone away.
-        }
-    }
-
-    private fun startAdvertising() {
-        val advertisingOptions = AdvertisingOptions.Builder().setStrategy(STRATEGY).build()
-        connectionsClient
-            .startAdvertising(
-                getUserNickname(), packageName, connectionLifecycleCallback, advertisingOptions
-            )
-            .addOnSuccessListener { unused ->
-                // We're advertising!
-            }
-            .addOnFailureListener { e ->
-                // We were unable to start advertising.
-            }
+    fun discover(view: View) {
+        startDiscovery()
+        btn_advrt.isEnabled = false
+        btn_discover.isEnabled = false
     }
 
     private fun startDiscovery() {
-        val discoveryOptions = DiscoveryOptions.Builder().setStrategy(STRATEGY).build()
-        connectionsClient
-            .startDiscovery(packageName, endpointDiscoveryCallback, discoveryOptions)
-            .addOnSuccessListener { unused ->
-                // We're discovering!
-            }
-            .addOnFailureListener { e ->
-                // We're unable to start discovering.
-            }
-    }
-
-    private fun getUserNickname(): String {
-        return txt_nickname.toString()
-    }
-
-    private fun getRoomName(): String {
-        return txt_room_name.toString()
-    }
-
-    fun discover(view: View) {
-        startDiscovery()
-        setStatusText("discovering")
-        btn_advrt.isEnabled = false
-        btn_discover.isEnabled = false
+        val myIntent = Intent(this, ButtonActivity::class.java)
+        myIntent.putExtra("code", txt_room_name.text.toString())
+        myIntent.putExtra("name", txt_nickname.text.toString())
+        myIntent.putExtra("mode", "JOIN")
+        startActivity(myIntent)
     }
 
     fun advertise(view: View) {
         startAdvertising()
-        setStatusText("advertising")
         btn_advrt.isEnabled = false
         btn_discover.isEnabled = false
     }
 
-    fun ready(view: View) {
-        endpointIds.forEach { opponentEndpointId ->
-            connectionsClient.sendPayload(
-                opponentEndpointId, Payload.fromBytes("ready".toByteArray(UTF_8))
-            )
-        }
-    }
-
-    @SuppressLint("SetTextI18n")
-    fun setStatusText(status: String) {
-        txt_status.text = txt_status.text.toString() + "\n" + status
+    private fun startAdvertising() {
+        val myIntent = Intent(this, ButtonActivity::class.java)
+        myIntent.putExtra("code", txt_room_name.text.toString())
+        myIntent.putExtra("name", txt_nickname.text.toString())
+        myIntent.putExtra("mode", "HOST")
+        startActivity(myIntent)
     }
 
     companion object {
         private const val REQUEST_CODE_REQUIRED_PERMISSIONS = 1
-        private val STRATEGY = Strategy.P2P_CLUSTER
         private val REQUIRED_PERMISSIONS = arrayOf(
             Manifest.permission.BLUETOOTH,
             Manifest.permission.BLUETOOTH_ADMIN,
