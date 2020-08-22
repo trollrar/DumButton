@@ -220,6 +220,7 @@ class ButtonActivity : AppCompatActivity() {
             Mode.HOST -> {
                 players["HOST"]!!.ready = !players["HOST"]!!.ready
                 sendPlayers()
+                updatePlayers()
             }
             Mode.JOIN -> connectionsClient.sendPayload(hostId!!, Payload.fromBytes(serialize(BytePackage("ready", null))!!))
         }
